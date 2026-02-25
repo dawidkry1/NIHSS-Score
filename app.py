@@ -1,4 +1,5 @@
 import streamlit as st
+import datetime
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="NIH Stroke Scale", page_icon="🧠", layout="centered")
@@ -41,24 +42,20 @@ st.markdown("""
     
     header {visibility: hidden;}
     footer {visibility: hidden;}
+
+    /* Image Styling */
+    .clinical-img {
+        border-radius: 8px;
+        border: 2px solid #e2e8f0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- NIHSS DATA ---
-# NIHSS-compliant coma defaults (EXCLUDING items 2 & 3)
 COMA_RULES = {
-    "1b": 2,
-    "1c": 2,
-    "4": 3,
-    "5a": 4,
-    "5b": 4,
-    "6a": 4,
-    "6b": 4,
-    "7": 0,
-    "8": 2,
-    "9": 3,
-    "10": 2,
-    "11": 2
+    "1b": 2, "1c": 2, "4": 3, "5a": 4, "5b": 4, 
+    "6a": 4, "6b": 4, "7": 0, "8": 2, "9": 3, 
+    "10": 2, "11": 2
 }
 
 NIHSS_ITEMS = [
@@ -91,6 +88,9 @@ if 'reset_key' not in st.session_state:
     st.session_state.reset_key = 0
 if 'scores' not in st.session_state:
     st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
+# State for image sizes
+if 'img_size' not in st.session_state:
+    st.session_state.img_size = {0: False, 1: False, 2: False}
 
 def reset_all():
     st.session_state.reset_key += 1
@@ -147,44 +147,51 @@ for item in NIHSS_ITEMS[1:]:
         )
         st.session_state.scores[item_id] = 0 if "UN" in choice else int(choice[0])
 
+    # --- ITEM 10 SPECIAL: ADD PHOTOS ---
+    if item_id == "10":
+        with st.expander("🖼️ View Clinical Reference Photos for Dysarthria"):
+            st.info("Tap the button below an image to toggle 'Big Picture' mode.")
+            
+            # Use columns for the 'Small' view
+            cols = st.columns(3)
+            
+            # List of 3 Photos (Replace these URLs with your actual file paths or URLs)
+            photos = [
+                "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/visibility/mw24.png", 
+                "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/face/mw24.png",
+                "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/assignment/mw24.png"
+            ]
+            
+            for i in range(3):
+                with cols[i]:
+                    # Determine width based on state
+                    is_big = st.session_state.img_size[i]
+                    img_width = 600 if is_big else 150
+                    
+                    # If big, use a full container width; otherwise, small thumbnail
+                    st.image(photos[i], use_container_width=is_big, caption=f"Photo {i+1}")
+                    
+                    if st.button("Expand/Shrink" if not is_big else "Close Big Picture", key=f"btn_{i}"):
+                        st.session_state.img_size[i] = not st.session_state.img_size[i]
+                        st.rerun()
+
 # --- FINAL SCORE ---
 st.divider()
 st.markdown("### Final Assessment")
 st.metric(label="NIHSS Total Score", value=f"{total_score} / 42", delta=severity, delta_color=color)
 
 # Keep top & bottom in sync
-if total_score != sum(st.session_state.scores.values()):
+current_total = sum(st.session_state.scores.values())
+if total_score != current_total:
     st.rerun()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import datetime
 
 # --- 9. SUMMARY & DOWNLOAD ---
 st.divider()
 st.header("Step 3: Clinical Summary")
 
-# Professional identifier input
 patient_id = st.text_input("Patient Initials")
 
 if st.button("Generate Clinical Note"):
-    # Create a detailed breakdown of the scoring for the notes
     breakdown = "\n".join([f"- {item['name']}: {st.session_state.scores[item['id']]}" for item in NIHSS_ITEMS])
     
     summary_text = f"""NIH STROKE SCALE (NIHSS) ASSESSMENT
@@ -206,10 +213,8 @@ PLAN:
 Assessed by: [Name/Grade]
 """
     
-    # Display for copying
     st.text_area("Copy to Clinical Notes:", summary_text, height=350)
     
-    # Download option
     st.download_button(
         label="Download Summary (.txt)",
         data=summary_text,
