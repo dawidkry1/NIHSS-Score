@@ -1,0 +1,220 @@
+import streamlit as st
+
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="NIH Stroke Scale", page_icon="🧠", layout="centered")
+
+# --- CSS STYLING (The "Replit" Look) ---
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    
+    /* Card Styling */
+    div.row-widget.stRadio {
+        background-color: white;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 15px;
+    }
+
+    /* Yellow Alert */
+    .coma-alert {
+        background-color: #fffbeb;
+        color: #92400e;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #fde68a;
+        margin-bottom: 20px;
+    }
+
+    /* Blue Info */
+    .info-box {
+        background-color: #eff6ff;
+        color: #1e40af;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #bfdbfe;
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+    }
+    
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- NIHSS DATA ---
+# NIHSS-compliant coma defaults (EXCLUDING items 2 & 3)
+COMA_RULES = {
+    "1b": 2,
+    "1c": 2,
+    "4": 3,
+    "5a": 4,
+    "5b": 4,
+    "6a": 4,
+    "6b": 4,
+    "7": 0,
+    "8": 2,
+    "9": 3,
+    "10": 2,
+    "11": 2
+}
+
+NIHSS_ITEMS = [
+    {"id": "1a", "name": "1a. Level of Consciousness", "info": "A 3 is scored only if the patient makes no movement (other than reflexive) in response to noxious stimulation.", "options": ["0 - Alert", "1 - Not Alert (arousable)", "2 - Not Alert (requires stimulation)", "3 - Unresponsive (Coma)"]},
+    {"id": "1b", "name": "1b. LOC Questions", "options": ["0 - Answers both correctly", "1 - Answers one correctly", "2 - Answers neither correctly"]},
+    {"id": "1c", "name": "1c. LOC Commands", "options": ["0 - Performs both correctly", "1 - Performs one correctly", "2 - Performs neither correctly"]},
+    {"id": "2", "name": "2. Best Gaze (Oculocephalic)", "options": ["0 - Normal", "1 - Partial gaze palsy", "2 - Forced deviation"]},
+    {"id": "3", "name": "3. Visual Fields (Bilateral Threat)", "options": ["0 - No visual loss", "1 - Partial hemianopia", "2 - Complete hemianopia", "3 - Bilateral hemianopia"]},
+    {"id": "4", "name": "4. Facial Palsy", "options": ["0 - Normal movement", "1 - Minor paralysis", "2 - Partial paralysis", "3 - Complete paralysis"]},
+    {"id": "5a", "name": "5a. Left Arm Motor", "options": ["0 - No drift", "1 - Drift", "2 - Some effort vs gravity", "3 - No effort vs gravity", "4 - No movement", "UN - Untestable"]},
+    {"id": "5b", "name": "5b. Right Arm Motor", "options": ["0 - No drift", "1 - Drift", "2 - Some effort vs gravity", "3 - No effort vs gravity", "4 - No movement", "UN - Untestable"]},
+    {"id": "6a", "name": "6a. Left Leg Motor", "options": ["0 - No drift", "1 - Drift", "2 - Some effort vs gravity", "3 - No effort vs gravity", "4 - No movement", "UN - Untestable"]},
+    {"id": "6b", "name": "6b. Right Leg Motor", "options": ["0 - No drift", "1 - Drift", "2 - Some effort vs gravity", "3 - No effort vs gravity", "4 - No movement", "UN - Untestable"]},
+    {"id": "7", "name": "7. Limb Ataxia", "options": ["0 - Absent", "1 - Present in one limb", "2 - Present in two limbs", "UN - Untestable"]},
+    {"id": "8", "name": "8. Sensory", "options": ["0 - Normal", "1 - Mild-to-moderate loss", "2 - Severe-to-total loss"]},
+    {"id": "9", "name": "9. Best Language", "options": ["0 - No aphasia", "1 - Mild-to-moderate aphasia", "2 - Severe aphasia", "3 - Mute/Global aphasia"]},
+    {"id": "10", "name": "10. Dysarthria", "options": ["0 - Normal", "1 - Mild-to-moderate dysarthria", "2 - Severe dysarthria", "UN - Untestable"]},
+    {"id": "11", "name": "11. Extinction/Inattention", "options": ["0 - No abnormality", "1 - Partial inattention", "2 - Profound inattention"]}
+]
+
+def get_interpretation(score):
+    if score == 0: return "No Stroke Symptoms", "normal"
+    elif 1 <= score <= 4: return "Minor Stroke", "normal"
+    elif 5 <= score <= 15: return "Moderate Stroke", "inverse"
+    elif 16 <= score <= 20: return "Moderate to Severe", "inverse"
+    else: return "Severe Stroke", "inverse"
+
+# --- SESSION STATE ---
+if 'reset_key' not in st.session_state:
+    st.session_state.reset_key = 0
+if 'scores' not in st.session_state:
+    st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
+
+def reset_all():
+    st.session_state.reset_key += 1
+    st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
+
+# --- HEADER ---
+st.title("NIH Stroke Scale")
+
+# --- SCORE CALCULATION ---
+total_score = sum(st.session_state.scores.values())
+severity, color = get_interpretation(total_score)
+
+st.metric(label="NIHSS Total Score", value=f"{total_score} / 42", delta=severity, delta_color=color)
+st.button("🔄 Reset Calculator", on_click=reset_all, use_container_width=True)
+st.divider()
+
+# --- ITEM 1a ---
+st.markdown(f"### {NIHSS_ITEMS[0]['name']}")
+st.markdown(f'<div class="info-box">ℹ️ {NIHSS_ITEMS[0]["info"]}</div>', unsafe_allow_html=True)
+loc_choice = st.radio("LOC", NIHSS_ITEMS[0]["options"], label_visibility="collapsed", key=f"1a_{st.session_state.reset_key}")
+loc_score = int(loc_choice[0])
+st.session_state.scores["1a"] = loc_score
+is_coma = (loc_score == 3)
+
+if is_coma:
+    st.markdown(
+        '<div class="coma-alert"><strong>⚠️ Coma Detected (1a = 3)</strong><br>'
+        'NIHSS coma defaults applied. Best gaze and visual fields still require examination.</div>',
+        unsafe_allow_html=True
+    )
+
+# --- REMAINING ITEMS ---
+for item in NIHSS_ITEMS[1:]:
+    item_id = item["id"]
+    st.markdown(f"**{item['name']}**")
+
+    if is_coma and item_id in COMA_RULES:
+        auto_val = COMA_RULES[item_id]
+        st.session_state.scores[item_id] = auto_val
+        st.radio(
+            item["name"],
+            item["options"],
+            index=auto_val,
+            disabled=True,
+            label_visibility="collapsed",
+            key=f"{item_id}_{st.session_state.reset_key}"
+        )
+    else:
+        choice = st.radio(
+            item["name"],
+            item["options"],
+            label_visibility="collapsed",
+            key=f"{item_id}_{st.session_state.reset_key}"
+        )
+        st.session_state.scores[item_id] = 0 if "UN" in choice else int(choice[0])
+
+# --- FINAL SCORE ---
+st.divider()
+st.markdown("### Final Assessment")
+st.metric(label="NIHSS Total Score", value=f"{total_score} / 42", delta=severity, delta_color=color)
+
+# Keep top & bottom in sync
+if total_score != sum(st.session_state.scores.values()):
+    st.rerun()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import datetime
+
+# --- 9. SUMMARY & DOWNLOAD ---
+st.divider()
+st.header("Step 3: Clinical Summary")
+
+# Professional identifier input
+patient_id = st.text_input("Patient Initials")
+
+if st.button("Generate Clinical Note"):
+    # Create a detailed breakdown of the scoring for the notes
+    breakdown = "\n".join([f"- {item['name']}: {st.session_state.scores[item['id']]}" for item in NIHSS_ITEMS])
+    
+    summary_text = f"""NIH STROKE SCALE (NIHSS) ASSESSMENT
+Date/Time: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+Patient ID: {patient_id}
+-------------------------------------------
+TOTAL NIHSS SCORE: {total_score} / 42
+INTERPRETATION: {severity}
+
+DETAILED BREAKDOWN:
+{breakdown}
+
+{"⚠️ NOTE: Coma defaults applied (1a=3)" if is_coma else ""}
+-------------------------------------------
+PLAN:
+- Clinical correlation required. 
+- Assessment performed as part of acute stroke evaluation.
+
+Assessed by: [Name/Grade]
+"""
+    
+    # Display for copying
+    st.text_area("Copy to Clinical Notes:", summary_text, height=350)
+    
+    # Download option
+    st.download_button(
+        label="Download Summary (.txt)",
+        data=summary_text,
+        file_name=f"NIHSS_{patient_id}_{datetime.date.today()}.txt",
+        mime="text/plain"
+    )
+
+st.caption("Disclaimer: This tool is a clinical decision aid. Diagnosis and management should be based on full clinical assessment and local protocols.")
