@@ -4,13 +4,12 @@ import datetime
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="NIH Stroke Scale", page_icon="🧠", layout="centered")
 
-# --- CSS STYLING (The "Replit" Look) ---
+# --- CSS STYLING ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
-    /* Card Styling */
     div.row-widget.stRadio {
         background-color: white;
         padding: 20px;
@@ -19,7 +18,6 @@ st.markdown("""
         margin-bottom: 15px;
     }
 
-    /* Yellow Alert */
     .coma-alert {
         background-color: #fffbeb;
         color: #92400e;
@@ -29,7 +27,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    /* Blue Info */
     .info-box {
         background-color: #eff6ff;
         color: #1e40af;
@@ -42,21 +39,11 @@ st.markdown("""
     
     header {visibility: hidden;}
     footer {visibility: hidden;}
-
-    /* Image Styling */
-    .clinical-img {
-        border-radius: 8px;
-        border: 2px solid #e2e8f0;
-    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- NIHSS DATA ---
-COMA_RULES = {
-    "1b": 2, "1c": 2, "4": 3, "5a": 4, "5b": 4, 
-    "6a": 4, "6b": 4, "7": 0, "8": 2, "9": 3, 
-    "10": 2, "11": 2
-}
+COMA_RULES = {"1b": 2, "1c": 2, "4": 3, "5a": 4, "5b": 4, "6a": 4, "6b": 4, "7": 0, "8": 2, "9": 3, "10": 2, "11": 2}
 
 NIHSS_ITEMS = [
     {"id": "1a", "name": "1a. Level of Consciousness", "info": "A 3 is scored only if the patient makes no movement (other than reflexive) in response to noxious stimulation.", "options": ["0 - Alert", "1 - Not Alert (arousable)", "2 - Not Alert (requires stimulation)", "3 - Unresponsive (Coma)"]},
@@ -88,13 +75,13 @@ if 'reset_key' not in st.session_state:
     st.session_state.reset_key = 0
 if 'scores' not in st.session_state:
     st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
-# State for image sizes
 if 'img_size' not in st.session_state:
     st.session_state.img_size = {0: False, 1: False, 2: False}
 
 def reset_all():
     st.session_state.reset_key += 1
     st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
+    st.session_state.img_size = {0: False, 1: False, 2: False}
 
 # --- HEADER ---
 st.title("NIH Stroke Scale")
@@ -116,110 +103,62 @@ st.session_state.scores["1a"] = loc_score
 is_coma = (loc_score == 3)
 
 if is_coma:
-    st.markdown(
-        '<div class="coma-alert"><strong>⚠️ Coma Detected (1a = 3)</strong><br>'
-        'NIHSS coma defaults applied. Best gaze and visual fields still require examination.</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown('<div class="coma-alert"><strong>⚠️ Coma Detected (1a = 3)</strong></div>', unsafe_allow_html=True)
 
 # --- REMAINING ITEMS ---
 for item in NIHSS_ITEMS[1:]:
     item_id = item["id"]
     st.markdown(f"**{item['name']}**")
 
+    # SPECIAL LOGIC FOR POINT 10: PHOTOS BEFORE OPTIONS
+    if item_id == "10":
+        st.info("Tap 'Expand' to see the full clinical reference page.")
+        # Place your converted PDF-to-Image files here
+        # Example: photos = ["page1.png", "page2.png", "page3.png"]
+        photos = [
+            "https://via.placeholder.com/600x800.png?text=Dysarthria+Reference+1",
+            "https://via.placeholder.com/600x800.png?text=Dysarthria+Reference+2", 
+            "https://via.placeholder.com/600x800.png?text=Dysarthria+Reference+3"
+        ]
+        
+        cols = st.columns(3)
+        for i in range(3):
+            with cols[i]:
+                is_big = st.session_state.img_size[i]
+                if is_big:
+                    # If expanded, we show it at full width below the columns
+                    pass 
+                else:
+                    st.image(photos[i], use_container_width=True)
+                    if st.button(f"🔍 Expand {i+1}", key=f"expand_{i}"):
+                        st.session_state.img_size[i] = True
+                        st.rerun()
+
+        # If one is selected to be "Big", show it here (full width)
+        for i in range(3):
+            if st.session_state.img_size[i]:
+                st.image(photos[i], use_container_width=True, caption=f"Full View: Reference {i+1}")
+                if st.button(f"Collapse Reference {i+1}", key=f"coll_{i}"):
+                    st.session_state.img_size[i] = False
+                    st.rerun()
+
+    # RADIO BUTTONS FOR SCORING
     if is_coma and item_id in COMA_RULES:
         auto_val = COMA_RULES[item_id]
         st.session_state.scores[item_id] = auto_val
-        st.radio(
-            item["name"],
-            item["options"],
-            index=auto_val,
-            disabled=True,
-            label_visibility="collapsed",
-            key=f"{item_id}_{st.session_state.reset_key}"
-        )
+        st.radio(item["name"], item["options"], index=auto_val, disabled=True, label_visibility="collapsed", key=f"{item_id}_{st.session_state.reset_key}")
     else:
-        choice = st.radio(
-            item["name"],
-            item["options"],
-            label_visibility="collapsed",
-            key=f"{item_id}_{st.session_state.reset_key}"
-        )
+        choice = st.radio(item["name"], item["options"], label_visibility="collapsed", key=f"{item_id}_{st.session_state.reset_key}")
         st.session_state.scores[item_id] = 0 if "UN" in choice else int(choice[0])
 
-    # --- ITEM 10 SPECIAL: ADD PHOTOS ---
-    if item_id == "10":
-        with st.expander("🖼️ View Clinical Reference Photos for Dysarthria"):
-            st.info("Tap the button below an image to toggle 'Big Picture' mode.")
-            
-            # Use columns for the 'Small' view
-            cols = st.columns(3)
-            
-            # List of 3 Photos (Replace these URLs with your actual file paths or URLs)
-            photos = [
-                "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/visibility/mw24.png", 
-                "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/face/mw24.png",
-                "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/assignment/mw24.png"
-            ]
-            
-            for i in range(3):
-                with cols[i]:
-                    # Determine width based on state
-                    is_big = st.session_state.img_size[i]
-                    img_width = 600 if is_big else 150
-                    
-                    # If big, use a full container width; otherwise, small thumbnail
-                    st.image(photos[i], use_container_width=is_big, caption=f"Photo {i+1}")
-                    
-                    if st.button("Expand/Shrink" if not is_big else "Close Big Picture", key=f"btn_{i}"):
-                        st.session_state.img_size[i] = not st.session_state.img_size[i]
-                        st.rerun()
-
-# --- FINAL SCORE ---
+# --- SUMMARY & DOWNLOAD ---
 st.divider()
-st.markdown("### Final Assessment")
-st.metric(label="NIHSS Total Score", value=f"{total_score} / 42", delta=severity, delta_color=color)
-
-# Keep top & bottom in sync
-current_total = sum(st.session_state.scores.values())
-if total_score != current_total:
-    st.rerun()
-
-# --- 9. SUMMARY & DOWNLOAD ---
-st.divider()
-st.header("Step 3: Clinical Summary")
-
+st.header("Clinical Summary")
 patient_id = st.text_input("Patient Initials")
 
 if st.button("Generate Clinical Note"):
     breakdown = "\n".join([f"- {item['name']}: {st.session_state.scores[item['id']]}" for item in NIHSS_ITEMS])
-    
-    summary_text = f"""NIH STROKE SCALE (NIHSS) ASSESSMENT
-Date/Time: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
-Patient ID: {patient_id}
--------------------------------------------
-TOTAL NIHSS SCORE: {total_score} / 42
-INTERPRETATION: {severity}
+    summary_text = f"NIHSS ASSESSMENT\nPatient: {patient_id}\nTotal Score: {total_score}\n\n{breakdown}"
+    st.text_area("Note:", summary_text, height=200)
 
-DETAILED BREAKDOWN:
-{breakdown}
-
-{"⚠️ NOTE: Coma defaults applied (1a=3)" if is_coma else ""}
--------------------------------------------
-PLAN:
-- Clinical correlation required. 
-- Assessment performed as part of acute stroke evaluation.
-
-Assessed by: [Name/Grade]
-"""
-    
-    st.text_area("Copy to Clinical Notes:", summary_text, height=350)
-    
-    st.download_button(
-        label="Download Summary (.txt)",
-        data=summary_text,
-        file_name=f"NIHSS_{patient_id}_{datetime.date.today()}.txt",
-        mime="text/plain"
-    )
-
-st.caption("Disclaimer: This tool is a clinical decision aid. Diagnosis and management should be based on full clinical assessment and local protocols.")
+st.caption("Disclaimer: Clinical decision aid only.")
