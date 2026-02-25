@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+import os
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="NIH Stroke Scale", page_icon="🧠", layout="centered")
@@ -75,13 +76,13 @@ if 'reset_key' not in st.session_state:
     st.session_state.reset_key = 0
 if 'scores' not in st.session_state:
     st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
-if 'img_size' not in st.session_state:
-    st.session_state.img_size = {0: False, 1: False, 2: False}
+if 'expanded_img' not in st.session_state:
+    st.session_state.expanded_img = None
 
 def reset_all():
     st.session_state.reset_key += 1
     st.session_state.scores = {item['id']: 0 for item in NIHSS_ITEMS}
-    st.session_state.img_size = {0: False, 1: False, 2: False}
+    st.session_state.expanded_img = None
 
 # --- HEADER ---
 st.title("NIH Stroke Scale")
@@ -105,42 +106,37 @@ is_coma = (loc_score == 3)
 if is_coma:
     st.markdown('<div class="coma-alert"><strong>⚠️ Coma Detected (1a = 3)</strong></div>', unsafe_allow_html=True)
 
-# --- REMAINING ITEMS ---
+# --- ITEMS 1-11 ---
 for item in NIHSS_ITEMS[1:]:
     item_id = item["id"]
     st.markdown(f"**{item['name']}**")
 
-    # SPECIAL LOGIC FOR POINT 10: PHOTOS BEFORE OPTIONS
+    # --- ITEM 10: DYSARTHRIA IMAGE LOGIC ---
     if item_id == "10":
-        st.info("Tap 'Expand' to see the full clinical reference page.")
-        # Place your converted PDF-to-Image files here
-        # Example: photos = ["page1.png", "page2.png", "page3.png"]
-        photos = [
-            "https://via.placeholder.com/600x800.png?text=Dysarthria+Reference+1",
-            "https://via.placeholder.com/600x800.png?text=Dysarthria+Reference+2", 
-            "https://via.placeholder.com/600x800.png?text=Dysarthria+Reference+3"
-        ]
+        st.write("Click a reference image to enlarge:")
+        
+        # Files must be named exactly this in your GitHub repo
+        photo_files = ["dysarthria_1.jpg", "dysarthria_2.jpg", "dysarthria_3.jpg"]
         
         cols = st.columns(3)
-        for i in range(3):
+        for i, file_name in enumerate(photo_files):
             with cols[i]:
-                is_big = st.session_state.img_size[i]
-                if is_big:
-                    # If expanded, we show it at full width below the columns
-                    pass 
-                else:
-                    st.image(photos[i], use_container_width=True)
-                    if st.button(f"🔍 Expand {i+1}", key=f"expand_{i}"):
-                        st.session_state.img_size[i] = True
+                if os.path.exists(file_name):
+                    st.image(file_name, use_container_width=True)
+                    if st.button(f"🔍 Expand {i+1}", key=f"btn_{i}"):
+                        st.session_state.expanded_img = file_name
                         st.rerun()
+                else:
+                    st.caption(f"Waiting for {file_name}...")
 
-        # If one is selected to be "Big", show it here (full width)
-        for i in range(3):
-            if st.session_state.img_size[i]:
-                st.image(photos[i], use_container_width=True, caption=f"Full View: Reference {i+1}")
-                if st.button(f"Collapse Reference {i+1}", key=f"coll_{i}"):
-                    st.session_state.img_size[i] = False
-                    st.rerun()
+        # Big Picture Toggle View
+        if st.session_state.expanded_img:
+            st.markdown("---")
+            st.image(st.session_state.expanded_img, use_container_width=True)
+            if st.button("❌ Close Big Picture", use_container_width=True):
+                st.session_state.expanded_img = None
+                st.rerun()
+            st.markdown("---")
 
     # RADIO BUTTONS FOR SCORING
     if is_coma and item_id in COMA_RULES:
@@ -151,14 +147,23 @@ for item in NIHSS_ITEMS[1:]:
         choice = st.radio(item["name"], item["options"], label_visibility="collapsed", key=f"{item_id}_{st.session_state.reset_key}")
         st.session_state.scores[item_id] = 0 if "UN" in choice else int(choice[0])
 
-# --- SUMMARY & DOWNLOAD ---
+# --- SUMMARY ---
 st.divider()
-st.header("Clinical Summary")
+st.header("Step 3: Clinical Summary")
 patient_id = st.text_input("Patient Initials")
 
 if st.button("Generate Clinical Note"):
     breakdown = "\n".join([f"- {item['name']}: {st.session_state.scores[item['id']]}" for item in NIHSS_ITEMS])
-    summary_text = f"NIHSS ASSESSMENT\nPatient: {patient_id}\nTotal Score: {total_score}\n\n{breakdown}"
-    st.text_area("Note:", summary_text, height=200)
+    summary_text = f"""NIH STROKE SCALE (NIHSS) ASSESSMENT
+Date/Time: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+Patient ID: {patient_id}
+-------------------------------------------
+TOTAL SCORE: {total_score} / 42
+INTERPRETATION: {severity}
+-------------------------------------------
+{breakdown}
+"""
+    st.text_area("Copy to Clinical Notes:", summary_text, height=300)
+    st.download_button("Download Summary", data=summary_text, file_name=f"NIHSS_{patient_id}.txt")
 
-st.caption("Disclaimer: Clinical decision aid only.")
+st.caption("Disclaimer: This tool is a clinical decision aid.")
